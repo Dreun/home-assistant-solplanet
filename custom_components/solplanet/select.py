@@ -1,5 +1,6 @@
 """Solplanet selects platform."""
 
+import asyncio
 from collections import abc
 from dataclasses import dataclass
 import logging
@@ -69,6 +70,15 @@ class SolplanetSelect(SolplanetEntity, SelectEntity):
 
         if item is not None:
             await self.entity_description.callback(item)
+            # Allow the dongle time to commit the register write before we re-read
+            # the current mode back from the device. Without this delay, the immediate
+            # coordinator poll can return the pre-write value (the dongle hasn't fully
+            # committed the new mod_r yet), causing the HA entity to revert to the
+            # previous option (e.g. "Custom mode" snapping back to "Self-consumption
+            # mode" milliseconds after being set). Confirmed on Solplanet AI-Dongle
+            # firmware V610-09578-02.013 — getdev.cgi?device=4 still returns the old
+            # mod_r for ~2-3 seconds after a successful setting.cgi write.
+            await asyncio.sleep(5)
             await self.coordinator.async_request_refresh()
 
     def _refresh_options(self) -> None:
